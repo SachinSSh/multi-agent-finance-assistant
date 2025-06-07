@@ -2,7 +2,7 @@
 
 # Multi-Agent Finance Assistant
 
-A sophisticated multi-source, multi-agent finance assistant that delivers spoken market briefs via a Streamlit app with advanced RAG capabilities.
+A sophisticated multi-source, multi-agent finance assistant that delivers spoken market briefs via a Streamlit app with advanced RAG capabilities
 
 ## 🏗️ Architecture Overview
 
