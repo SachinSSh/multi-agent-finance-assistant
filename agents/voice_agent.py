@@ -10,7 +10,6 @@ import base64
 import json
 import asyncio
 
-# Initialize logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -20,13 +19,11 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Configuration
 TTS_MODEL = os.getenv("TTS_MODEL", "en-us-neural")
 STT_MODEL = os.getenv("STT_MODEL", "whisper-medium")
 
-# Request/Response models
 class SpeechToTextRequest(BaseModel):
-    audio_data: str  # Base64 encoded audio
+    audio_data: str
     language: Optional[str] = "en-US"
     model: Optional[str] = None
 
@@ -43,27 +40,19 @@ class SpeechResponse(BaseModel):
     metrics: Dict[str, Any]
     timestamp: datetime
 
-# Voice processing service
 class VoiceService:
     def __init__(self):
         self.stt_model = STT_MODEL
         self.tts_model = TTS_MODEL
     
     async def speech_to_text(self, request: SpeechToTextRequest) -> Dict[str, Any]:
-        """Convert speech to text"""
         start_time = time.time()
         
         try:
-            # In a real implementation, this would call a speech recognition service
-            # For this example, we'll simulate the process
-            
-            # Decode base64 audio (in a real implementation)
             # audio_bytes = base64.b64decode(request.audio_data)
             
-            # Simulate processing delay
             await asyncio.sleep(0.5)
             
-            # Simulate transcription result
             transcription = "What is the current market outlook for semiconductor stocks?"
             confidence = 0.92
             
@@ -83,18 +72,11 @@ class VoiceService:
             raise HTTPException(status_code=500, detail=str(e))
     
     async def text_to_speech(self, request: TextToSpeechRequest) -> Dict[str, Any]:
-        """Convert text to speech"""
         start_time = time.time()
         
         try:
-            # In a real implementation, this would call a TTS service
-            # For this example, we'll simulate the process
-            
-            # Simulate processing delay
             await asyncio.sleep(0.5)
             
-            # Simulate audio generation (in a real implementation, this would be actual audio)
-            # Here we're just returning a placeholder base64 string
             audio_data = "base64_encoded_audio_data_placeholder"
             confidence = 0.95
             
@@ -114,13 +96,10 @@ class VoiceService:
             logger.error(f"Text-to-speech error: {str(e)}")
             raise HTTPException(status_code=500, detail=str(e))
 
-# Initialize service
 voice_service = VoiceService()
 
-# API endpoints
 @app.post("/stt", response_model=SpeechResponse)
 async def speech_to_text(request: SpeechToTextRequest):
-    """Convert speech to text"""
     result = await voice_service.speech_to_text(request)
     
     return SpeechResponse(
@@ -132,7 +111,6 @@ async def speech_to_text(request: SpeechToTextRequest):
 
 @app.post("/tts", response_model=SpeechResponse)
 async def text_to_speech(request: TextToSpeechRequest):
-    """Convert text to speech"""
     result = await voice_service.text_to_speech(request)
     
     return SpeechResponse(
@@ -144,7 +122,6 @@ async def text_to_speech(request: TextToSpeechRequest):
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
     return {
         "status": "healthy",
         "timestamp": datetime.now(),
