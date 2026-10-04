@@ -1,12 +1,12 @@
 version: '3.8'
 
 services:
-  app:
+  orchestrator:
     build:
       context: ..
       dockerfile: docker/Dockerfile
     ports:
-      - "8501:8501"
+      - "8000:8000"
     volumes:
       - ..:/app
     env_file:

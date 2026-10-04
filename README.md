@@ -3,13 +3,13 @@
 # Multi-Agent Finance Assistant
 #
 
-A sophisticated multi-source, multi-agent finance assistant that delivers spoken market briefs via a Streamlit app with advanced RAG capabilities
+A sophisticated multi-source, multi-agent finance assistant that delivers spoken market briefs via a Next.js web app with advanced RAG capabilities
 
 ## 🏗️ Architecture Overview
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Streamlit UI  │◄───┤  Orchestrator   │───►│  Voice Pipeline │
+│   Next.js UI    │◄───┤  Orchestrator   │───►│  Voice Pipeline │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                               │
                               ▼
@@ -65,8 +65,9 @@ python -m data_ingestion.embeddings --init
 # Start services
 docker-compose up -d
 
-# Run Streamlit app
-streamlit run streamlit_app/app.py
+# Run Next.js app
+cd frontend
+pnpm dev
 ```
 
 ## 🤖 Agent Implementation Details

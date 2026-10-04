@@ -84,3 +84,5 @@ cython_debug/
 .idea/
 .ruff_cache/
 .pypirc
+
+frontend/node_modules

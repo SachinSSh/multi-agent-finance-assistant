@@ -2,7 +2,10 @@
 
 # requirements.txt
 REQUIREMENTS_TXT = """
-streamlit>=1.28.0
+fastapi>=0.100.0
+uvicorn>=0.23.0
+httpx>=0.24.0
+pydantic>=2.0.0
 pandas>=2.0.0
 numpy>=1.24.0
 plotly>=5.15.0
@@ -24,9 +27,6 @@ matplotlib>=3.7.0
 seaborn>=0.12.0
 altair>=5.0.0
 pydeck>=0.8.0
-streamlit-aggrid>=0.3.4
-streamlit-option-menu>=0.3.6
-streamlit-extras>=0.3.0
 sendgrid>=6.10.0
 twilio>=8.5.0
 boto3>=1.28.0
