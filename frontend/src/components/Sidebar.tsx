@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 const navItems = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/briefs", label: "Market Briefs", icon: MessageSquare },
   { href: "/portfolio", label: "Portfolio", icon: Briefcase },
   { href: "/analytics", label: "Analytics", icon: LineChart },

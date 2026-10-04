@@ -8,6 +8,8 @@ import logging
 from typing import Dict, List, Optional, Any
 import time
 import json
+import os
+from pathlib import Path
 from datetime import datetime
 
 # Initialize logging
@@ -176,8 +178,17 @@ class AgentOrchestrator:
         async def call_agent(agent_id: str, task_config: Dict):
             start_time = time.time()
             try:
+                # Load current connections to inject keys if needed by the agent
+                connections = _load_connections()
+                headers = {}
+                for conn in connections:
+                    if conn.get("enabled", True):
+                        # Pass API keys to downstream agents securely via internal headers
+                        provider_key = f"X-{conn['provider'].upper()}-API-KEY"
+                        headers[provider_key] = conn["api_key"]
+
                 url = f"{AGENT_SERVICES[agent_id]}{task_config['endpoint']}"
-                response = await self.client.post(url, json=task_config['params'])
+                response = await self.client.post(url, json=task_config['params'], headers=headers)
                 response.raise_for_status()
                 
                 latency = time.time() - start_time
@@ -375,6 +386,170 @@ async def fallback_clarification(request: dict):
         }
     
     return {"message": "Confidence level acceptable, no clarification needed"}
+
+# ────────────────────────────────────────────
+# API Connections Management
+# ────────────────────────────────────────────
+
+CONNECTIONS_FILE = Path(__file__).parent / "connections.json"
+
+class ConnectionCreate(BaseModel):
+    name: str                        # e.g. "OpenAI", "AlphaVantage"
+    provider: str                    # e.g. "openai", "alphavantage", "elevenlabs", "broker"
+    api_key: str
+    base_url: Optional[str] = None   # optional custom endpoint
+    metadata: Optional[Dict[str, Any]] = {}
+
+class ConnectionUpdate(BaseModel):
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    enabled: Optional[bool] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+def _load_connections() -> List[Dict[str, Any]]:
+    """Load connections from local JSON file."""
+    if not CONNECTIONS_FILE.exists():
+        return []
+    try:
+        return json.loads(CONNECTIONS_FILE.read_text())
+    except Exception:
+        return []
+
+def _save_connections(connections: List[Dict[str, Any]]):
+    """Persist connections to local JSON file."""
+    CONNECTIONS_FILE.write_text(json.dumps(connections, indent=2, default=str))
+
+def _mask_key(key: str) -> str:
+    """Return masked version of API key for frontend display."""
+    if len(key) <= 8:
+        return "••••••••"
+    return key[:4] + "••••••••" + key[-4:]
+
+@app.get("/api/connections")
+async def list_connections():
+    """List all saved API connections (keys are masked)."""
+    connections = _load_connections()
+    # Mask keys before sending to frontend
+    safe = []
+    for conn in connections:
+        safe_conn = {**conn, "api_key_masked": _mask_key(conn.get("api_key", ""))}
+        safe_conn.pop("api_key", None)
+        safe.append(safe_conn)
+    return {"connections": safe}
+
+@app.post("/api/connections")
+async def create_connection(conn: ConnectionCreate):
+    """Add a new API connection."""
+    connections = _load_connections()
+
+    # Check for duplicate provider
+    for existing in connections:
+        if existing["provider"] == conn.provider and existing["name"] == conn.name:
+            raise HTTPException(status_code=409, detail=f"Connection '{conn.name}' already exists. Use PUT to update.")
+
+    # Validate the key works (quick connectivity check per provider)
+    status = await _test_connection(conn.provider, conn.api_key, conn.base_url)
+
+    new_conn = {
+        "id": f"conn_{int(time.time() * 1000)}",
+        "name": conn.name,
+        "provider": conn.provider,
+        "api_key": conn.api_key,
+        "base_url": conn.base_url,
+        "enabled": True,
+        "status": status,
+        "metadata": conn.metadata or {},
+        "created_at": datetime.now().isoformat(),
+        "updated_at": datetime.now().isoformat(),
+    }
+    connections.append(new_conn)
+    _save_connections(connections)
+
+    logger.info(f"Connection created: {conn.name} ({conn.provider})")
+    return {
+        "id": new_conn["id"],
+        "name": new_conn["name"],
+        "provider": new_conn["provider"],
+        "status": status,
+        "message": f"Connection '{conn.name}' added successfully."
+    }
+
+@app.put("/api/connections/{connection_id}")
+async def update_connection(connection_id: str, update: ConnectionUpdate):
+    """Update an existing API connection."""
+    connections = _load_connections()
+    for conn in connections:
+        if conn["id"] == connection_id:
+            if update.api_key is not None:
+                conn["api_key"] = update.api_key
+            if update.base_url is not None:
+                conn["base_url"] = update.base_url
+            if update.enabled is not None:
+                conn["enabled"] = update.enabled
+            if update.metadata is not None:
+                conn["metadata"] = {**conn.get("metadata", {}), **update.metadata}
+            # Re-test connectivity if key was changed
+            if update.api_key is not None:
+                conn["status"] = await _test_connection(conn["provider"], conn["api_key"], conn.get("base_url"))
+            conn["updated_at"] = datetime.now().isoformat()
+            _save_connections(connections)
+            return {"message": f"Connection '{conn['name']}' updated.", "status": conn["status"]}
+    raise HTTPException(status_code=404, detail="Connection not found.")
+
+@app.delete("/api/connections/{connection_id}")
+async def delete_connection(connection_id: str):
+    """Remove an API connection."""
+    connections = _load_connections()
+    original_len = len(connections)
+    connections = [c for c in connections if c["id"] != connection_id]
+    if len(connections) == original_len:
+        raise HTTPException(status_code=404, detail="Connection not found.")
+    _save_connections(connections)
+    return {"message": "Connection deleted."}
+
+@app.post("/api/connections/{connection_id}/test")
+async def test_connection(connection_id: str):
+    """Re-test connectivity for an existing connection."""
+    connections = _load_connections()
+    for conn in connections:
+        if conn["id"] == connection_id:
+            status = await _test_connection(conn["provider"], conn["api_key"], conn.get("base_url"))
+            conn["status"] = status
+            conn["updated_at"] = datetime.now().isoformat()
+            _save_connections(connections)
+            return {"status": status, "provider": conn["provider"]}
+    raise HTTPException(status_code=404, detail="Connection not found.")
+
+async def _test_connection(provider: str, api_key: str, base_url: Optional[str] = None) -> str:
+    """Test if an API key is valid by making a lightweight probe request."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            if provider == "openai":
+                url = (base_url or "https://api.openai.com") + "/v1/models"
+                resp = await client.get(url, headers={"Authorization": f"Bearer {api_key}"})
+                return "connected" if resp.status_code == 200 else "auth_failed"
+
+            elif provider == "alphavantage":
+                url = f"https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=IBM&interval=1min&apikey={api_key}&datatype=json"
+                resp = await client.get(url)
+                data = resp.json()
+                if "Error Message" in data or "Note" in data:
+                    return "rate_limited"
+                return "connected"
+
+            elif provider == "elevenlabs":
+                url = (base_url or "https://api.elevenlabs.io") + "/v1/user"
+                resp = await client.get(url, headers={"xi-api-key": api_key})
+                return "connected" if resp.status_code == 200 else "auth_failed"
+
+            else:
+                # Generic provider — just store it, can't validate
+                return "stored"
+    except httpx.ConnectError:
+        return "unreachable"
+    except Exception as e:
+        logger.error(f"Connection test error for {provider}: {e}")
+        return "error"
 
 if __name__ == "__main__":
     import uvicorn
