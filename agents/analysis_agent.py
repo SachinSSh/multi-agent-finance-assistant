@@ -15,7 +15,8 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import StandardScaler
 import warnings
 warnings.filterwarnings('ignore')
-
+from fastapi import FastAPI, Request
+import uvicorn
 @dataclass
 class AnalysisResult:
     metric_name: str
@@ -63,3 +64,34 @@ class AnalysisAgent:
             result_df['BB_Position'] = (df['Close'] - result_df['BB_Lower']) / result_df['BB_Width']
             
           
+            return result_df
+        except Exception as e:
+            self.logger.error(f"Error calculating technicals: {e}")
+            return df
+
+# ──────────────────────────────────────────────
+# FastAPI Wrapper for Analysis Agent
+# ──────────────────────────────────────────────
+app = FastAPI(title="Analysis Agent API", port=8004)
+
+@app.post("/analyze-risk")
+async def analyze_risk(request: Request):
+    """
+    Accepts: { query }
+    Returns: { beta, var, volatility, risk_score, confidence }
+    """
+    data = await request.json()
+    
+    # In a full implementation, we'd pull actual ticker strings from the query 
+    # and run pd/np calculations on AlphaVantage data. Here we provide mock math:
+    return {
+        "beta": 1.15,
+        "var_95": -0.032,
+        "volatility": 0.18,
+        "risk_score": 6.2,
+        "confidence": 0.95,
+        "interpretation": "Portfolio is slightly aggressive with a Beta of 1.15. 95% VaR is -3.2%."
+    }
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8004)

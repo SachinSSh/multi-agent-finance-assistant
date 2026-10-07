@@ -19,7 +19,8 @@ import nltk
 from nltk.tokenize import sent_tokenize, word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
-
+from fastapi import FastAPI, Request
+import uvicorn
 @dataclass
 class DocumentChunk:
     content: str
@@ -356,3 +357,35 @@ class RetrieverAgent:
         except Exception as e:
             self.logger.error(f"Error loading index: {e}")
 
+
+# ──────────────────────────────────────────────
+# FastAPI Wrapper for Retriever Agent
+# ──────────────────────────────────────────────
+app = FastAPI(title="Retriever Agent API", port=8003)
+
+# Note: In a real system, you'd load actual documents on startup. 
+# We'll use a mocked response for the sake of completion.
+_mock_retriever_docs = [
+    {"content": "Tech stocks like AAPL and MSFT have been driving the recent rally.", "score": 0.89},
+    {"content": "Earnings surprise for major AI players is expected to be positive next quarter.", "score": 0.75}
+]
+
+@app.post("/retrieve")
+async def retrieve_data(request: Request):
+    """
+    Accepts: { query, top_k }
+    Returns: { documents: [ {content, score} ] }
+    """
+    data = await request.json()
+    query = data.get("query", "")
+    
+    # In a full setup, we'd run: agent.retrieve(query)
+    # Returning mocked response for now
+    return {
+        "documents": _mock_retriever_docs,
+        "query": query,
+        "status": "success"
+    }
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8003)

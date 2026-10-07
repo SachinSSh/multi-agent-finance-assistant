@@ -68,6 +68,19 @@ class AgentOrchestrator:
         self.client = httpx.AsyncClient(timeout=30.0)
         self.confidence_threshold = 0.7
         
+    def _get_agent_headers(self) -> Dict[str, str]:
+        try:
+            connections = _load_connections()
+            headers = {}
+            for conn in connections:
+                if conn.get("enabled", True):
+                    provider_key = f"X-{conn['provider'].upper()}-API-KEY"
+                    headers[provider_key] = conn["api_key"]
+            return headers
+        except Exception as e:
+            logger.error(f"Failed to load connection headers: {e}")
+            return {}
+        
     async def route_query(self, request: MarketBriefRequest) -> MarketBriefResponse:
         """Main orchestration logic for processing queries"""
         start_time = time.time()
@@ -119,9 +132,11 @@ class AgentOrchestrator:
     async def process_voice_input(self, audio_data: str) -> str:
         """Process voice input through voice agent"""
         try:
+            headers = self._get_agent_headers() if hasattr(self, '_get_agent_headers') else {}
             response = await self.client.post(
                 f"{AGENT_SERVICES['voice_agent']}/stt",
-                json={"audio_data": audio_data}
+                json={"audio_data": audio_data},
+                headers=headers
             )
             response.raise_for_status()
             return response.json()["transcription"]
@@ -244,9 +259,11 @@ class AgentOrchestrator:
         
         try:
             # Call language agent for final synthesis
+            headers = self._get_agent_headers()
             response = await self.client.post(
                 f"{AGENT_SERVICES['language_agent']}/synthesize",
-                json=synthesis_data
+                json=synthesis_data,
+                headers=headers
             )
             response.raise_for_status()
             synthesis_result = response.json()
@@ -301,9 +318,11 @@ class AgentOrchestrator:
     async def generate_voice_output(self, text: str) -> str:
         """Generate voice output through voice agent"""
         try:
+            headers = self._get_agent_headers()
             response = await self.client.post(
                 f"{AGENT_SERVICES['voice_agent']}/tts",
-                json={"text": text}
+                json={"text": text},
+                headers=headers
             )
             response.raise_for_status()
             return response.json()["audio_data"]

@@ -473,10 +473,19 @@ class MarketDataService:
 market_service = MarketDataService()
 
 # API Endpoints
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
+
 @app.post("/market-data", response_model=MarketDataResponse)
-async def get_market_data(request: MarketDataRequest):
+async def get_market_data(request: MarketDataRequest, req: Request):
     """Main market data endpoint"""
     try:
+        # Dynamically inject API key from orchestrator headers if available
+        alpha_vantage_key = req.headers.get("X-ALPHAVANTAGE-API-KEY")
+        if alpha_vantage_key:
+            global ts, fd
+            ts = TimeSeries(key=alpha_vantage_key, output_format='pandas')
+            fd = FundamentalData(key=alpha_vantage_key)
+            
         if request.type == "portfolio_exposure":
             data = await market_service.get_portfolio_exposure(request)
             confidence = 0.9
